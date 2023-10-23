@@ -1,0 +1,22 @@
+
+db = sqlite3.connect("Data.bd")
+
+
+cursor = db.execute("""
+CREATE TABLE users (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    username TEXT NOT NULL,
+    hash TEXT NOT NULL
+)
+""")
+
+cursor = db.execute("""
+CREATE TABLE purchases (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER,
+    product_name TEXT NOT NULL,
+    price REAL NOT NULL,
+    purchase_date DATETIME DEFAULT CURRENT_TIMESTAMP,
+    image_path TEXT
+)
+""")

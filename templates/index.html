@@ -1,0 +1,157 @@
+<!-- index.html -->
+{% extends "layout.html" %}
+
+{% block main %}
+
+<div class="container">
+    <div class="row">
+        <div class="video-container">
+            <video id="cameraFeed" width="480" height="320" autoplay></video>
+            <img id="processedImage" width="480" height="320" style="display: none;" />
+        </div>        
+        <div class="col-md-6">
+            <ul id="itemList"></ul>
+            <div class="action-buttons">
+                <p>Do you want to add these products?</p>
+                <button id="acceptButton" class="btn btn-primary">Accept</button>
+                <button id="cancelButton" class="btn btn-danger">Cancel</button>
+            </div>
+        </div>
+    </div>
+    <button id="captureButton" class="btn btn-primary">Add Product</button>
+    <canvas id="captureCanvas" width="480" height="320" style="display: none;"></canvas>
+</div>
+
+<script>
+    const videoElement = document.getElementById('cameraFeed');
+    
+    if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+        navigator.mediaDevices.getUserMedia({ video: true }).then(function(stream) {
+            videoElement.srcObject = stream;
+            videoElement.play();
+        });
+    }
+
+    const captureButton = document.getElementById('captureButton');
+    const captureCanvas = document.getElementById('captureCanvas');
+    const itemList = document.getElementById('itemList');
+    const processedImageElement = document.getElementById('processedImage');
+
+    captureButton.addEventListener('click', function() {
+        // Dibuja la imagen actual del video en el canvas
+        const ctx = captureCanvas.getContext('2d');
+        ctx.drawImage(videoElement, 0, 0, 480, 320);
+        
+        // Crea FormData y añade la imagen capturada
+        const formData = new FormData();
+        captureCanvas.toBlob(function(blob) {
+            formData.append('image', blob, 'captured.jpg');
+
+            // Envia la imagen al servidor para análisis
+            fetch('/analyze_image', {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => response.json())
+            .then(result => {
+                if (result.error) {
+                    alert(result.error);  // Aviso mostrado en el frontend
+                    console.log(result.error)
+                    setTimeout(() => {
+                        alert.dismiss();
+                    }, 2000); // El aviso se cierra después de 2 segundos
+                    return;
+                }
+                // Limpia la lista actual de ítems
+                while (itemList.firstChild) {
+                    itemList.removeChild(itemList.firstChild);
+                }
+
+                // Muestra la imagen procesada en el elemento img
+                processedImageElement.src = 'data:image/jpeg;base64,' + result.image;
+                processedImageElement.style.display = "block"; 
+
+                // Agrega todos los objetos detectados a la lista de ítems
+                result.detected_objects.forEach(detectedObject => {
+                    const li = document.createElement('li');
+                    
+                    // Texto del producto
+                    const productText = document.createTextNode(detectedObject.name + " - Price: ");
+                    li.appendChild(productText);
+                    
+                    // Input del precio
+                    const priceInput = document.createElement('input');
+                    priceInput.setAttribute('type', 'number');
+                    priceInput.setAttribute('placeholder', 'Price en $');
+                    li.appendChild(priceInput);
+                    
+                    // Botón de eliminar
+                    const deleteButton = document.createElement('button');
+                    deleteButton.textContent = 'Delete';
+                    deleteButton.addEventListener('click', function() {
+                        li.remove();
+                    });
+                    li.appendChild(deleteButton);
+                    
+                    itemList.appendChild(li);
+                });
+
+                // Muestra la opción para agregar productos
+                const confirmationDiv = document.createElement('div');
+                confirmationDiv.innerHTML = `<p>Do you want to add these products?</p>
+                                            <button id="acceptButton">Accept</button>
+                                            <button id="cancelButton">Cancel</button>`;
+                itemList.appendChild(confirmationDiv);
+
+                // Evento para agregar productos a la lista
+                document.getElementById('acceptButton').addEventListener('click', function() {
+                    const productsWithPrices = [];
+                    Array.from(itemList.children).forEach(itemNode => {
+                        const productName = itemNode.textContent.split(" - ")[0];
+                        const productPriceInput = itemNode.querySelector('input');
+                        if (productPriceInput) {  // Asegurarse de que existe un input en el elemento li
+                            const productPrice = productPriceInput.value;
+                            productsWithPrices.push({
+                                name: productName,
+                                price: parseFloat(productPrice)
+                            });
+                        }
+                    });
+
+                    fetch('/save_products', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({products: productsWithPrices})
+                    })
+                    .then(response => response.json())
+                    .then(data => {
+                        if(data.success) {
+                            console.log('Los productos se han guardado con éxito en la base de datos.');
+                        } else {
+                            console.error('Hubo un error al guardar los productos en la base de datos.');
+                        }
+                    });
+                    confirmationDiv.remove();  // Elimina el mensaje y los botones
+                    itemList.removeChild(itemList.firstChild);
+                    processedImageElement.style.display = "none";
+                });
+
+                // Evento para cancelar y volver al estado original
+                document.getElementById('cancelButton').addEventListener('click', function() {
+                    processedImageElement.style.display = "none"; // Esconde la imagen procesada
+                    confirmationDiv.remove(); // Elimina el mensaje y los botones
+                    itemList.removeChild(itemList.firstChild);
+                    // Aquí puedes volver a cargar la lista original si es necesario
+                });
+            })
+            .catch(error => {
+                console.error('Error:', error);
+            });
+        });
+    });
+
+</script>
+
+{% endblock %}

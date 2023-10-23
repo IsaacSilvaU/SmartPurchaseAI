@@ -1,0 +1,101 @@
+{% extends "layout.html" %}
+
+{% block title %}
+    Purchase History
+{% endblock %}
+
+{% macro calculate_total(purchases) %}
+    {% set ns = namespace(total=0) %}
+    {% for p in purchases %}
+        {% set ns.total = ns.total + p.price %}
+    {% endfor %}
+    {{ "%.2f"|format(ns.total) }}
+{% endmacro %}
+
+
+{% block main %}
+    <div class="mb-3 text-center logo-container">
+        <img src="{{ url_for('static', filename='images/log3.png') }}" alt="Logo" width="150">
+        <h2>Chart of monthly expenses for the year</h2>
+    </div>
+    <div class="chart-container">
+        <canvas id="expenseChart"></canvas>
+    </div>
+    
+    <script>
+        var ctx = document.getElementById('expenseChart').getContext('2d');
+
+        var months = [];
+        var totals = [];
+
+        {% for month, purchases in grouped_purchases.items() %}
+            months.push("{{ month }}");
+            totals.push({{ calculate_total(purchases) }});
+        {% endfor %}
+
+        var myChart = new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels: months,
+            datasets: [{
+                label: 'Expenses per month',
+                data: totals,
+                backgroundColor: 'rgba(75, 192, 192, 0.2)',
+                borderColor: 'rgba(75, 192, 192, 1)',
+                borderWidth: 1
+            }]
+        },
+        options: {
+            scales: {
+                y: {
+                    beginAtZero: true
+                }
+            }
+        }
+    });
+
+    </script>
+
+    <h2>Purchase History</h2>
+
+    {% for month, purchases in grouped_purchases|dictsort(reverse=true) %}
+    <div class="month-container">
+        <h3>{{ month }}</h3>
+        <div class="purchase-list">
+            <table class="table table-striped">
+                <thead>
+                    <tr>
+                        <th>Product Name</th>
+                        <th>Price</th>
+                        <th>Date</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for purchase in purchases %}
+                    <tr>
+                        <td>{{ purchase.product_name }}</td>
+                        <td>${{ "%.2f"|format(purchase.price) }}</td>
+                        <td>{{ purchase.purchase_date }}</td>
+                    </tr>
+                    {% endfor %}
+                    <tr>
+                        <td><strong>Total:</strong></td>
+                        <td><strong>${{ calculate_total(purchases) }}</strong></td>
+                        <td></td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+    {% endfor %}
+
+    <style>
+        .month-container {
+            border: 1px solid #ccc;
+            margin-bottom: 20px;
+            overflow-y: scroll;
+            max-height: 300px;
+        }
+    </style>
+
+{% endblock %}
